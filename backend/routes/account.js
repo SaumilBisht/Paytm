@@ -20,38 +20,35 @@ router.post("/transfer",authMiddleware,async(req,res)=>{
 
   session.startTransaction();
 
-  const {amount,to}=req.body
-
-  //Fetch the accounts within the transaction
-  const account=await Account.findOne({userId:req.userId}).session(session);
-
-  if(!account ||account.balance<amount)
+  try 
   {
-    await session.abortTransaction();
-    return res.status(400).json({
-      message:"Insufficient balance"
-    })
+    const { amount, to } = req.body;
+
+    // Fetch sender's account
+    const account = await Account.findOne({ userId: req.userId }).session(session);
+    if (!account || account.balance < amount) {
+      throw new Error("Insufficient balance");
+    }
+
+    // Fetch recipient's account
+    const toAccount = await Account.findOne({ userId: to }).session(session);
+    if (!toAccount) {
+      throw new Error("Recipient account not found");
+    }
+
+    // Perform the transaction
+    await Account.updateOne({ userId: req.userId }, { $inc: { balance: -amount } }).session(session);
+    await Account.updateOne({ userId: to }, { $inc: { balance: amount } }).session(session);
+
+    // Commit the transaction
+    await session.commitTransaction();
+    res.json({ message: "Transaction successful" });
+  } catch (err) {
+    await session.abortTransaction(); // Rollback changes
+    res.status(400).json({ message: err.message });
+  } finally {
+    session.endSession(); // Always end the session
   }
-
-  const toAccount=await Account.findOne({userId:to}).session(session);
-  if(!toAccount)
-  {
-    await session.abortTransaction();
-    return res.status(400).json({
-      message:"Account not found"
-    })
-  }
-
-  //perform transaction
-
-  await Account.updateOne({userId:req.userId},{$inc:{balance:-amount}}).session(session);
-  await Account.updateOne({userId:to},{$inc:{balance:amount}}).session(session);
-
-  //commit the transaction
-  await session.commitTransaction();
-  res.json({
-    message:"Transaction successful"
-  })
-})
+});
 
 module.exports=router
