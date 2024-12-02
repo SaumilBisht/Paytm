@@ -1,3 +1,3 @@
 const JWT_SECRET="bishtsaumil"
-module.exports=JWT_SECRET
+module.exports={JWT_SECRET};
  

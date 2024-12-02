@@ -4,7 +4,7 @@ const jwt=require("jsonwebtoken")
 const router=express.Router()
 const {User, Account}=require("../root/db")
 const {JWT_SECRET}=require("../config")
-const { authMiddleware } = require("../middleware")
+const {authMiddleware} = require("../middleware")
 
 
 const signupCheck=zod.object({
@@ -15,43 +15,44 @@ const signupCheck=zod.object({
 })//valid email
 
 router.post('/signup',async (req,res)=>{
-  const body=req.body;
+  const { success } = signupCheck.safeParse(req.body)
+    if (!success) {
+        return res.status(411).json({
+            message: "Email already taken / Incorrect inputs"
+        })
+    }
 
-  const {success}=signupCheck.safeParse(body)//success ko {} cuz object return krta h wrna success.success krna pdta
-
-  if(!success){
-    return res.status(400).json({
-      message: "Invalid Inputs"
+    const existingUser = await User.findOne({
+        username: req.body.username
     })
-  }
 
-  const user=await User.findOne({
-    username:body.username
-  })//db mein ek hi username iska
+    if (existingUser) {
+        return res.status(411).json({
+            message: "Email already taken/Incorrect inputs"
+        })
+    }
 
-  if(user)//if user exists
-  {
-    return res.status(411).json({
-      message: "Email is already taken"
+    const user = await User.create({
+        username: req.body.username,
+        password: req.body.password,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
     })
-  }
+    const userId = user._id;
 
-  const dbUser=await User.create(body);
+    await Account.create({
+        userId,
+        balance: 1 + Math.random() * 10000
+    })
 
-  const userId=user._id;
-  await Account.create({
-    userId,
-    balance: 1+ Math.random()*10000
-  })
-  
-  const token=jwt.sign({
-    userId:dbUser._id
-  },JWT_SECRET)
-//token ham userId,Secret se bna rhe
-  res.json({
-    message:"User created successfully",
-    token
-  }) //token return 
+    const token = jwt.sign({
+        userId
+    }, JWT_SECRET);
+
+    res.json({
+        message: "User created successfully",
+        token: token
+    })
 
 })
  
@@ -93,7 +94,7 @@ const updateBody=zod.object({
   password:zod.string().optional()
 })
 
-router.put('/user',authMiddleware,async (req,res)=>{
+router.put("/user",authMiddleware,async (req,res)=>{
   const {success}=updateBody.safeParse(req.body)
   if(!success)
   {
